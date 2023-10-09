@@ -1,0 +1,190 @@
+<html>
+  <head>
+    <script>
+      
+      /** Maze Generation Code */
+
+        // Builds a complete (entirely connected) graph on which
+        // to base the maze
+        function buildCompleteGraph(width, height) {
+          const nodes = [];
+          const edges = [];
+
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const nodeIndex = nodes.length;
+              nodes.push({ x, y, id: nodeIndex });
+              
+              if (x != (width - 1)) {
+                const rightNeighborIndex = nodeIndex + 1;
+                edges.push([nodeIndex, rightNeighborIndex]);
+              }
+              if (y != (height - 1)) {
+                const bottomNeighborIndex = nodeIndex + width;
+                edges.push([nodeIndex, bottomNeighborIndex]);
+              }
+            }
+          }
+
+          return { nodes, edges };
+        }
+
+        function buildRndMazeGraph(startingGraph) {
+          const edges = [];
+          const nodeCount = startingGraph.nodes.length;
+          const nodeConnectionCount = Array(nodeCount).fill(0);
+          const unconnectedNodes = new Set();
+          for (let i = 0; i < nodeCount; i++) {
+            unconnectedNodes.add(i);
+          }
+
+          let currentNodeId = 0;
+          while(unconnectedNodes.size > 0) {
+            unconnectedNodes.delete(currentNodeId);
+
+            // find possible edges to use
+            const candidateEdges = getEdgesForNode(currentNodeId, startingGraph).filter(edge => {
+              const otherNodeId = edge[0] == currentNodeId ? edge[1] : edge[0];
+              return nodeConnectionCount[otherNodeId] == 0;
+            });
+
+            let nextNode = undefined;
+            if (candidateEdges.length > 0) {
+              // randomly pick one edge to make a connection
+              const chosenEdge = candidateEdges[Math.floor(Math.random() * candidateEdges.length)];
+              nodeConnectionCount[currentNodeId] += 1;
+              edges.push(chosenEdge);
+              // remove now-connected node
+              currentNodeId = chosenEdge[0] == currentNodeId ? chosenEdge[1] : chosenEdge[0];              
+            } else {
+              // At this point we've finished a random path, so we need to backtrack
+              // to find the last node with unexplored connections
+              let foundNextNode = false;
+              for (let i = edges.length - 1; i > -1; i--) {
+                if (foundNextNode) { break; }
+                const backTrackedNodeId = edges[i][0];
+                const edgesForLastNode = getEdgesForNode(backTrackedNodeId, startingGraph);
+                for (edge of edgesForLastNode) {
+                  // If one of the edges has an un-connected node, connect it
+                  // and start path generating from there
+                  if (unconnectedNodes.has(edge[1])) {
+                    edges.push(edge);
+                    currentNodeId = edge[1];
+                    foundNextNode = true;
+                    break;
+                  }
+                }
+              }
+            }
+          };
+
+          return {
+            edges,
+            nodes: startingGraph.nodes.slice(0)
+          };
+        }
+
+        function getEdgesForNode(nodeId, graph) {
+          const edges = graph.edges.filter(edge => {
+            return edge[0] == nodeId || edge[1] == nodeId;
+          });
+          // orient results relative to input node id
+          for (let i = 0; i < edges.length; i++) {
+            if (edges[i][0] != nodeId) {
+              edges[i] = [edges[i][1], edges[i][0]];
+            }
+          }
+          return edges;
+        }
+    </script>
+
+    <script>
+      /** Maze Graphical Rendering Code */
+      const mazeX = 30;
+      const mazeY = 30;
+      const scale = 35;
+      const padding = 30;
+      const pathWidth = 28;
+      const foreground = '#ffffff';
+      const background = '#333333';
+
+      // From: https://www.educative.io/answers/how-to-draw-lines-on-canvas-using-javascript
+      function drawLine(ctx, x1, y1, x2, y2, stroke = 'black', width = pathWidth) {
+        ctx.beginPath();
+        const actualX1 = x1 + padding;
+        const actualY1 = y1 + padding;
+        const actualX2 = x2 + padding;
+        const actualY2 = y2 + padding;
+        ctx.moveTo(actualX1, actualY1);
+        ctx.lineTo(actualX2, actualY2);
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = width;
+        ctx.stroke();
+
+        const halfWidth = width / 2.0;
+        drawCircle(ctx, actualX1, actualY1, halfWidth, stroke);
+        drawCircle(ctx, actualX2, actualY2, halfWidth, stroke);
+      }
+
+      function drawCircle(ctx, x, y, radius, color) {
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+
+      function renderMaze() {
+        const canvas = document.getElementById('maze');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = background;
+        ctx.fillRect(0, 0, (mazeX * scale) + (padding * 1), (mazeY * scale) + (padding * 1));
+
+        const completeGraph = buildCompleteGraph(mazeX, mazeY);
+        const mazeGraph = buildRndMazeGraph(completeGraph);
+        renderGraph(mazeGraph, ctx, foreground)
+
+        // randomly pick a start and end
+        const startingCandiates = mazeGraph.nodes.filter(node => {
+          // limit to first row
+          if (node.id < mazeX) {
+            const edges = getEdgesForNode(node.id, mazeGraph);
+            return edges.length == 1;
+          }
+          return false;
+        });
+        
+        const lastRowMinIndex = mazeX * (mazeY - 1);
+        const endingCandidates = mazeGraph.nodes.filter(node => {
+          // limit to last row
+          if (node.id >= lastRowMinIndex) {
+            const edges = getEdgesForNode(node.id, mazeGraph);
+            return edges.length == 1;
+          }
+        });
+
+        const start = startingCandiates[Math.floor(Math.random() * startingCandiates.length)];
+        const end = endingCandidates[Math.floor(Math.random() * endingCandidates.length)];
+
+        drawCircle(ctx, (start.x * scale) + padding, (start.y * scale) + padding, pathWidth / 2, 'red');
+        drawCircle(ctx, (end.x * scale) + padding, (end.y * scale) + padding, pathWidth / 2, '#50C878');
+      }
+
+      function renderGraph({ nodes, edges }, ctx, color) {
+        for (const edge of edges) {
+          const [fromNodeIndex, toNodeIndex] = edge;
+          const fromNode = nodes[fromNodeIndex];
+          const toNode = nodes[toNodeIndex];
+          drawLine(ctx, fromNode.x * scale, fromNode.y * scale, toNode.x * scale, toNode.y * scale, color);
+        }
+      }
+
+      window.onload = renderMaze;
+    </script>
+  </head>
+  <body>
+    <canvas id="maze" style="position: absolute; top: 0; left: 0;"></canvas>
+  </body>
+</html>
