@@ -100,11 +100,11 @@
 
     <script>
       /** Maze Graphical Rendering Code */
-      const mazeX = 36;
-      const mazeY = 24;
-      const scale = 35;
+      const mazeX = 48;
+      const mazeY = 36;
+      const scale = 24;
       const padding = 30;
-      const pathWidth = 28;
+      const pathWidth = scale * 0.75;
       const foreground = '#ffffff';
       const background = '#333333';
 
@@ -133,43 +133,57 @@
         ctx.fill();
       }
 
+      function drawRect(ctx, x1, y1, width, height, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x1, y1, x1 + width, y1 + height);
+      }
+
       function renderMaze() {
         const canvas = document.getElementById('maze');
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         const ctx = canvas.getContext('2d');
 
-        ctx.fillStyle = background;
-        ctx.fillRect(0, 0, (mazeX * scale) + (padding * 1), (mazeY * scale) + (padding * 1));
+        // Render black background
+        drawRect(ctx, 0, 0, (mazeX * scale) + (padding * 1), (mazeY * scale) + (padding * 1), background);
 
         const completeGraph = buildCompleteGraph(mazeX, mazeY);
         const mazeGraph = buildRndMazeGraph(completeGraph);
         renderGraph(mazeGraph, ctx, foreground)
 
-        // randomly pick a start and end
-        const startingCandiates = mazeGraph.nodes.filter(node => {
-          // limit to first row
-          if (node.id < mazeX) {
-            const edges = getEdgesForNode(node.id, mazeGraph);
-            return edges.length == 1;
-          }
-          return false;
+        const edgeList = completeGraph.nodes.map(node => {
+          return getEdgesForNode(node.id, mazeGraph);
         });
-        
+
+        const startingCandiates = [];
+        const endingCandidates = [];
+        const middleCandidate = [];
+
         const lastRowMinIndex = mazeX * (mazeY - 1);
-        const endingCandidates = mazeGraph.nodes.filter(node => {
-          // limit to last row
-          if (node.id >= lastRowMinIndex) {
-            const edges = getEdgesForNode(node.id, mazeGraph);
-            return edges.length == 1;
+        completeGraph.nodes.forEach(node => {
+          if (edgeList[node.id].length == 1) {
+            if (node.id < mazeX) {
+              startingCandiates.push(node);
+            } else if (node.id >= lastRowMinIndex) {
+              endingCandidates.push(node);
+            } else {
+              middleCandidate.push(node);
+            }
           }
         });
 
+        // Randomly pick points in the maze for the user
         const start = startingCandiates[Math.floor(Math.random() * startingCandiates.length)];
         const end = endingCandidates[Math.floor(Math.random() * endingCandidates.length)];
+        const point3 = middleCandidate[Math.floor(Math.random() * middleCandidate.length)];
+        const point4 = middleCandidate[Math.floor(Math.random() * middleCandidate.length)];
+        const point5 = middleCandidate[Math.floor(Math.random() * middleCandidate.length)];
 
-        drawCircle(ctx, (start.x * scale) + padding, (start.y * scale) + padding, pathWidth / 2, 'red');
-        drawCircle(ctx, (end.x * scale) + padding, (end.y * scale) + padding, pathWidth / 2, '#50C878');
+        drawCircle(ctx, (start.x * scale) + padding, (start.y * scale) + padding, pathWidth / 3, 'red');
+        drawCircle(ctx, (end.x * scale) + padding, (end.y * scale) + padding, pathWidth / 3, 'blue');
+        drawCircle(ctx, (point3.x * scale) + padding, (point3.y * scale) + padding, pathWidth / 3, '#50C878');
+        drawCircle(ctx, (point4.x * scale) + padding, (point4.y * scale) + padding, pathWidth / 3, '#FDDA0D');
+        drawCircle(ctx, (point5.x * scale) + padding, (point5.y * scale) + padding, pathWidth / 3, '#F28C28');
       }
 
       function renderGraph({ nodes, edges }, ctx, color) {
